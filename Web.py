@@ -30,7 +30,7 @@ T = {
     "outline": "#909097",
     "outline_variant": "#45464d",
     "primary": "#bec6e0",
-    "secondary": "#4edea3",           
+    "secondary": "#4edea3",            
     "tertiary": "#7bd0ff",            
     "error_container": "#93000a",
     "emergency_red": "#EF4444",       
@@ -158,7 +158,7 @@ st.markdown(f"""
          padding:{SPACE['xs']}px {SPACE['md']}px; margin-bottom:{SPACE['md']}px;">
         <div style="display:flex; align-items:center; gap:{SPACE['xs']}px;">
             <span class="pulse-dot"></span>
-            <span style="font-size:20px; font-weight:700; letter-spacing:-0.01em; color:{T['on_surface']};">LifeGuard AI</span>
+            <span style="font-size:20px; font-weight:700; letter-spacing:-0.01em; color:{T['on_surface']};">Huang-Yai Wai-Cha-Ra</span>
             <span class="label-caps" style="margin-left:{SPACE['base']}px;">Clinical Intelligence</span>
         </div>
         <div class="status-pill">CLOUD BROADCAST ACTIVE</div>
