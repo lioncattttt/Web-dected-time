@@ -10,7 +10,7 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfigurati
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="LifeGuard AI - Live Monitor",
+    page_title="Huang-Yai Wai-Cha-Ra",
     layout="wide",
     initial_sidebar_state="expanded"
 )
