@@ -159,7 +159,7 @@ st.markdown(f"""
         <div style="display:flex; align-items:center; gap:{SPACE['xs']}px;">
             <span class="pulse-dot"></span>
             <span style="font-size:20px; font-weight:700; letter-spacing:-0.01em; color:{T['on_surface']};">Huang-Yai Wai-Cha-Ra</span>
-            <span class="label-caps" style="margin-left:{SPACE['base']}px;">Clinical Intelligence</span>
+            <span class="label-caps" style="margin-left:{SPACE['base']}px;"></span>
         </div>
         <div class="status-pill">CLOUD BROADCAST ACTIVE</div>
     </nav>
