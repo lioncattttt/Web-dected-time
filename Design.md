@@ -1,5 +1,5 @@
 ---
-name: Clinical Intelligence
+name: Huang-Yai Wai-Cha-Ra
 colors:
   surface: '#101415'
   surface-dim: '#101415'
