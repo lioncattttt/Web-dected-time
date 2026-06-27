@@ -15,9 +15,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Initialize Session State for Log Persistence ---
-if "logs" not in st.session_state:
-    st.session_state.logs = [f"⏱ [SYSTEM LOG] Core pipeline hooked, ready. — {datetime.now().strftime('%H:%M:%S')}"]
+# --- Initialize Log File to clear stale session history ---
+LOG_FILE = "fall_events.log"
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w", encoding="utf-8") as f:
+        f.write(f"⏱ [SYSTEM] Core pipeline hooked, ready. — {datetime.now().strftime('%H:%M:%S')}\n")
 
 # --- 2. DESIGN TOKENS ---
 T = {
@@ -140,6 +142,10 @@ css_template = """
         .stButton > button[kind="primary"] { background-color: var(--emergency-red) !important; border-color: var(--emergency-red) !important; color: #fff !important; }
         
         hr { border-color: var(--outline-variant) !important; opacity: 0.4; }
+        
+        /* Custom Tracking Log Classes */
+        .log-line-critical { color: var(--emergency-red); font-family: 'JetBrains Mono', monospace; font-size: 13px; margin-bottom: 4px; font-weight: 600; }
+        .log-line-normal { color: #ffffff; font-family: 'JetBrains Mono', monospace; font-size: 13px; margin-bottom: 4px; opacity: 0.85; }
     </style>
 """
 
@@ -177,6 +183,12 @@ with st.sidebar:
     confidence_threshold = st.slider("AI Sensitivity (Confidence)", 0.0, 1.0, 0.45)
     
     st.info("💡 Click 'Start' inside the video monitor window to turn on your local browser webcam feed stream.")
+    
+    # Auto-refresh helper button to clear logs instantly
+    if st.button("Clear Tracking Logs", use_container_width=True):
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"⏱ [SYSTEM] Log wiped — {datetime.now().strftime('%H:%M:%S')}\n")
+        st.rerun()
 
 # --- 7. MAIN LAYOUT GRID ---
 col_main, col_intel = st.columns([2, 1])
@@ -189,21 +201,23 @@ with col_main:
     class VideoTransformer(VideoProcessorBase):
         def __init__(self):
             self.model = model
-            self.conf = 0.45  # Default initialization fallback
+            self.conf = 0.45  
             self.pose_history = deque()
             self.time_window_ms = 1000  
             self.fall_velocity_threshold = 280.0 
+            self.last_logged_state = ""
+            self.last_log_time = 0
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
             h, w, _ = img.shape
             
-            # ส่งภาพคำนวณผ่าน YOLO Pipeline using dynamic thread-safe threshold attribute
             results = self.model(img, conf=self.conf, verbose=False)
             annotated_frame = results[0].plot()
             
             status_text = "STATUS: MONITORING (ACTIVE)"
             status_color = (163, 222, 78) 
+            current_detected_state = "ACTIVE"
             
             if results[0].boxes is not None and len(results[0].boxes) > 0:
                 box_obj = results[0].boxes[0]
@@ -233,14 +247,17 @@ with col_main:
                     if velocity_y > self.fall_velocity_threshold:
                         status_text = "ALERT: CRITICAL FALL DETECTED"
                         status_color = (68, 68, 239) 
+                        current_detected_state = "CRITICAL FALL"
                         
-                    elif aspect_ratio > 1.2 or "lying" in cls_name or "down" in cls_name:
+                    elif aspect_ratio > 1.2 or "lying" in cls_name or "down" in cls_name or "faint" in cls_name:
                         status_text = f"STATUS: LYING DOWN ({cls_name.upper()})"
                         status_color = (255, 208, 123) 
+                        current_detected_state = "FAINT / LYING DOWN"
                         
                     else:
                         status_text = f"STATUS: ACTIVE ({cls_name.upper()})"
                         status_color = (163, 222, 78) 
+                        current_detected_state = f"ACTIVE ({cls_name.upper()})"
                     
                     cv2.putText(annotated_frame, f"Velocity Y: {int(velocity_y)} px/s", (20, h - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1)
                     cv2.putText(annotated_frame, f"Aspect Ratio: {aspect_ratio:.2f}", (20, h - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1)
@@ -249,7 +266,26 @@ with col_main:
             cv2.rectangle(annotated_frame, (20, 20), (450, 65), status_color, 1)
             cv2.putText(annotated_frame, status_text, (35, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, status_color, 2)
             
-            # --- FIX 2: Correct call to classmethod from the av library module ---
+            # --- Dynamic Thread-Safe Background Logger ---
+            now_sec = time.time()
+            if current_detected_state != self.last_logged_state or (now_sec - self.last_log_time > 4.0):
+                self.last_logged_state = current_detected_state
+                self.last_log_time = now_sec
+                timestamp = datetime.now().strftime('%H:%M:%S')
+                
+                # Assign formatting flag based on pose urgency
+                if "FALL" in current_detected_state or "FAINT" in current_detected_state or "LYING" in current_detected_state:
+                    log_entry = f"🔴 [CRITICAL] {current_detected_state} detected — {timestamp}\n"
+                else:
+                    log_entry = f"⚪ [TRACKING] Status verified: {current_detected_state} — {timestamp}\n"
+                
+                # Append event line instantly into background worker data stream
+                try:
+                    with open(LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(log_entry)
+                except:
+                    pass
+
             return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
     st.markdown('<div class="live-feed-container"><div class="scanning-line"></div>', unsafe_allow_html=True)
@@ -263,7 +299,6 @@ with col_main:
         async_processing=True,
     )
     
-    # --- FIX 3: Push slider updates directly to the running worker thread context ---
     if ctx.video_processor:
         ctx.video_processor.conf = confidence_threshold
         
@@ -279,6 +314,29 @@ with col_intel:
         </div></div>
     """, unsafe_allow_html=True)
     
-    log_box = st.container(height=280, border=True)
+    # --- Live Rendering Workable Intelligence Log Container ---
+    st.markdown("<p class='label-caps' style='font-size:11px; margin-bottom:4px;'>Activity Telemetry Logs</p>", unsafe_allow_html=True)
+    log_box = st.container(height=320, border=True)
+    
     with log_box:
-        st.markdown("".join(st.session_state.logs), unsafe_allow_html=True)
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            
+            # Display log events in reverse-chronological order (newest alerts on top)
+            for line in reversed(lines):
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                
+                if "[CRITICAL]" in line_str or "🔴" in line_str:
+                    st.markdown(f"<div class='log-line-critical'>{line_str}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='log-line-normal'>{line_str}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='log-line-normal'>Waiting for stream initialization...</div>", unsafe_allow_html=True)
+            
+    # Lightweight interactive component to prompt log panel redraws automatically
+    if ctx.state.playing:
+        time.sleep(0.5)
+        st.rerun()
